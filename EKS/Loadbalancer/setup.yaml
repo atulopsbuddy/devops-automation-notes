@@ -1,0 +1,95 @@
+
+---
+
+### ✅ 2. `setup.yaml` (All-in-One)
+
+```yaml
+# Kubernetes Deployment + Service + Subnet Tagging Commands (as comments)
+
+# -----------------------------
+# 🟢 Deployment
+# -----------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+        - name: my-container
+          image: 990636949613.dkr.ecr.us-east-1.amazonaws.com/practices:my-app-v32
+          ports:
+            - containerPort: 3000
+      tolerations:
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
+---
+# -----------------------------
+# 🌐 Service (Public NLB)
+# -----------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app-service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  type: LoadBalancer
+  selector:
+    app: my-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+
+# -----------------------------
+# 📌 Subnet Tagging (Manual AWS CLI — Required for LoadBalancer to work)
+# ⚠️ Run these in your terminal. Replace <subnet-id> and <CLUSTER_NAME>
+# -----------------------------
+
+# -----------------------------
+# 🏷️ Subnet Tagging - AWS CLI
+# -----------------------------
+
+# ✅ Public Subnet Tags – Required for Internet-facing LoadBalancers (like NLB/ELB):
+# These subnets should be tagged with:
+# Key:   kubernetes.io/role/elb
+# Value: 1
+# Key:   kubernetes.io/cluster/<CLUSTER_NAME>
+# Value: owned
+
+# Example AWS CLI:
+# aws ec2 create-tags --resources subnet-abc12345 \
+#   --tags Key=kubernetes.io/role/elb,Value=1
+
+# aws ec2 create-tags --resources subnet-abc12345 \
+#   --tags Key=kubernetes.io/cluster/eks-cluster,Value=owned
+
+# ✅ Private Subnet Tags – Used for internal LoadBalancers (optional if not using internal LBs):
+# These subnets should be tagged with:
+# Key:   kubernetes.io/role/internal-elb
+# Value: 1
+# Key:   kubernetes.io/cluster/<CLUSTER_NAME>
+# Value: owned
+
+# Example AWS CLI:
+# aws ec2 create-tags --resources subnet-def67890 \
+#   --tags Key=kubernetes.io/role/internal-elb,Value=1
+
+# aws ec2 create-tags --resources subnet-def67890 \
+#   --tags Key=kubernetes.io/cluster/eks-cluster,Value=owned
+
+# ✅ You can verify tags using:
+# aws ec2 describe-subnets \
+#   --filters "Name=tag:kubernetes.io/cluster/eks-cluster,Values=owned" \
+#   --query "Subnets[*].{ID:SubnetId,AZ:AvailabilityZone,Tags:Tags}" \
+#   --output table
+
